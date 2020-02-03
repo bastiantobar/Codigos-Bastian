@@ -1,0 +1,173 @@
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta
+      name="viewport"
+      content="initial-scale=1, maximum-scale=1,user-scalable=no"
+    />
+    <!--
+  ArcGIS API for JavaScript, https://js.arcgis.com
+  For more information about the popuptemplate-promise sample, read the original sample description at developers.arcgis.com.
+  https://developers.arcgis.com/javascript/latest/sample-code/popuptemplate-promise/index.html
+  -->
+<title>PopupTemplate with promise - 4.13</title>
+
+    <link
+      rel="stylesheet"
+      href="https://js.arcgis.com/4.13/esri/themes/light/main.css"
+    />
+    <script src="https://js.arcgis.com/4.13/"></script>
+
+    <style>
+      html,
+      body,
+      #viewDiv {
+        padding: 0;
+        margin: 0;
+        height: 100%;
+        width: 100%;
+      }
+    </style>
+
+    <script>
+      require([
+        "esri/Map",
+        "esri/views/MapView",
+        "esri/layers/FeatureLayer",
+        "esri/tasks/QueryTask",
+        "esri/Graphic",
+        "esri/tasks/support/Query",
+        "esri/tasks/support/StatisticDefinition",
+        "esri/Basemap"
+      ], function(
+        Map,
+        MapView,
+        FeatureLayer,
+        QueryTask,
+        Graphic,
+        Query,
+        StatisticDefinition,
+        Basemap
+      ) {
+        // Query electric charging stations that intersect a county that was clicked
+        var queryChargingStationsTask = new QueryTask({
+          
+            url:"https://gisredeo.chilquinta.cl/public/rest/services/APPSISTEMAS/GAM_APOYO_POSTE/FeatureServer/1",
+        });
+
+        // USA counties layer
+        var countiesLayer = new FeatureLayer({
+          url:"https://gisredeo.chilquinta.cl/public/rest/services/APPSISTEMAS/GAM_APOYO_POSTE/FeatureServer/0",
+          outFields: ["*"],
+          minScale: 0,
+          maxScale: 0,
+          definitionExpression:"comuna='quilpue' AND propiedad ='empresa' AND nm_empresa = 'chilquinta'",
+          // create a new popupTemplate for the layer
+          popupTemplate: {
+            // autocasts as new PopupTemplate()
+            title: "County of {id_nodo}",
+            showRelatedRecords: true,
+            content: queryChargingStations
+          }
+        });
+
+        /*****************************************************************
+        * Query electric charging stations that intersect the county
+        * that was clicked for statistics. Statistics query will return
+        * number of charging stations that intersect the county, and break
+        * down the total number by types of stations (level 1, 2, or 3).
+        * Results will be returned to popupTemplate's content.
+        /*****************************************************************/
+
+        function queryChargingStations(feature) {
+        //  console.log(feature);
+          // count and types of electric charging stations that intersect the county
+          var countLevel1 = new StatisticDefinition({
+            statisticType: "count",
+            onStatisticField: "nm_empresa",
+            outStatisticFieldName: "numLevel_1"
+          });
+          var query = new Query({
+            geometry: feature.graphic.geometry,
+            outFields: ["nm_empresa"],
+            spatialRelationship: "intersects",
+          //outStatistics: [countLevel1]
+            where:"id_nodo=" + feature.graphic.attributes.id_nodo            
+          });
+        //  console.log(feature.graphic.attributes.id_nodo)
+          // execute the query task
+          return queryChargingStationsTask
+            .execute(query)
+            .then(function(result) {
+              var len = result.features.length;
+              var attr = "";
+              if(len == 0){
+                attr ="No hay datos";
+                return attr;
+              }else{
+                var features = result.features;
+                var Arr = Array();
+                var i=0;
+                for(x=0;x<features.length;x++){
+                    var nm_empresa = features[x].attributes.nm_empresa;
+                    var miDetalle = new Object();
+                    miDetalle.nm_empresa = nm_empresa;
+                    Arr.push(miDetalle); 
+                    i++
+                }
+                if(i == features.length){
+                  let datos = [];
+                  for(var a =0 ; a<Arr.length;a++)
+                  {
+                    datos.push(Arr[a].nm_empresa);
+                  }
+                  return   datos.join("<br>"); 
+                }
+              }
+            });
+          }
+
+        var map = new Map({
+          basemap: new Basemap({
+            portalItem: {
+              // autocasts as new PortalItem()
+              id: "3582b744bba84668b52a16b0b6942544"
+            }
+          }),
+          layers: [countiesLayer]
+        });
+
+        // Create the MapView
+        var view = new MapView({
+          container: "viewDiv",
+          map: map,
+          zoom: 10,
+          center:[-71.7018, -33.0228], 
+        });
+
+        view.popup.watch("selectedFeature", function(e) {
+          view.graphics.removeAll();
+          if (e && e.geometry) {
+            view.graphics.add(
+              new Graphic({
+                geometry: e.geometry,
+                symbol: {
+                  type: "simple-fill",
+                  style: "none",
+                  outline: {
+                    color: "#6600FF",
+                    width: 2
+                  }
+                }
+              })
+            );
+          }
+        });
+      });
+    </script>
+  </head>
+
+  <body>
+    <div id="viewDiv"></div>
+  </body>
+</html>
